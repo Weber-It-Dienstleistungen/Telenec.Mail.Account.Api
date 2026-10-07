@@ -1,5 +1,7 @@
+using System.Net;
 using System.Net.Mail;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Telenec.Mail.Account.Api.Contracts;
@@ -33,6 +35,20 @@ builder.Services
         options => options.WindowMinutes is >= 1 and <= 60,
         "Password change rate limit window must be between 1 and 60 minutes.")
     .ValidateOnStart();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto;
+
+    options.ForwardLimit = 1;
+
+    options.KnownProxies.Clear();
+
+    options.KnownProxies.Add(IPAddress.Loopback);
+    options.KnownProxies.Add(IPAddress.IPv6Loopback);
+});
 
 builder.Services.AddSingleton<
     IPasswordChangeService,
@@ -74,6 +90,7 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseRateLimiter();
 
 app.MapGet("/", () => Results.Ok(new
